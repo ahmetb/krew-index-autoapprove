@@ -41,12 +41,19 @@ func webhook(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	evType := req.Header.Get("X-GitHub-Event")
+	if evType != "pull_request" {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "expected X-GitHub-Event: pull_request; got: %s", evType)
+		return
+	}
+
 	type prEvent struct {
 		Action      string `json:"action"`
 		PullRequest struct {
-			URL      string `json:"url"`
-			Number   int    `json:"number"`
-			PatchURL string `json:"patch_url"`
+			URL     string `json:"url"`
+			Number  int    `json:"number"`
+			DiffURL string `json:"diff_url"`
 		} `json:"pull_request"`
 		Repository struct {
 			Name  string `json:"name"`
@@ -66,13 +73,13 @@ func webhook(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if ev.Action != "create" && ev.Action != "synchronize" {
+	if ev.Action != "opened" && ev.Action != "create" && ev.Action != "synchronize" {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "event action %s not accepted", ev.Action)
+		fmt.Fprintf(w, "event action %q not accepted", ev.Action)
 		return
 	}
 
-	patchReq, err := http.Get(ev.PullRequest.PatchURL)
+	patchReq, err := http.Get(ev.PullRequest.DiffURL)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintf(w, "failed to get patch: %v", err)
@@ -102,15 +109,16 @@ func webhook(w http.ResponseWriter, req *http.Request) {
 	err = bump.IsValidBump(b)
 
 	var comment string
-	comment += "_Beep beep! I’m a robot speaking on behalf of @ahmetb._\n"
+	comment += ":robot: _Beep beep! I’m a robot speaking on behalf of @ahmetb._ :robot:\n\n-----\n\n"
 	if err == nil {
 		comment += "This pull request seems to be a straightforward version bump.\n"
-		comment += "I'll go ahead and accept it.\n\n"
+		comment += "I'll go ahead and accept it. :+1: Cheers.\n\n"
 		comment += "/lgtm\n"
 		comment += "/approve\n"
 	} else {
-		comment += "This pull request doesn't seem to be a straightforward version bump." +
-			"I'll have a human review this."
+		comment += "This pull request **doesn't** seem to be a straightforward version bump." +
+			" I'll have a human review this.\n\n"
+		comment += "_Why wasn't this detected as a plugin version bump:_\n\n>" + err.Error()
 	}
 
 	_, resp, err := gh.Issues.CreateComment(context.TODO(),

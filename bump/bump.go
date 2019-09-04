@@ -80,10 +80,17 @@ func isBumpPlugin(d *diff.FileDiff) error {
 
 	log.Printf("oldVersion: %s, newVersion: %s", svA, svB)
 
+	var urlChanges bool
 	for _, hunk := range d.Hunks {
-		if err := isBumpHunk(hunk.Body, vA, vB); err != nil {
+		ok, err := isBumpHunk(hunk.Body, vA, vB)
+		if err != nil {
 			return err
 		}
+		urlChanges = urlChanges || ok
+	}
+
+	if !urlChanges {
+		return errors.New("no 'uri:' field changes done in the patch")
 	}
 
 	return nil
@@ -97,7 +104,7 @@ var (
 	sumDiffLine     = regexp.MustCompile(`^[\+\-]\s+(\- )?sha256:\s(.*)`)
 )
 
-func isBumpHunk(hunk []byte, vA, vB string) error {
+func isBumpHunk(hunk []byte, vA, vB string) (bool, error) {
 	lines := bytes.Split(hunk, []byte{'\n'})
 
 	var hasURL bool
@@ -114,13 +121,13 @@ func isBumpHunk(hunk []byte, vA, vB string) error {
 			hasURL = true
 			continue
 		}
-		return fmt.Errorf("diff line unrecognized for version bumps: [%s]", string(line))
+		return false, fmt.Errorf("diff line unrecognized for version bumps: [%s]", string(line))
 	}
 
 	if hasURL {
 		ua, ub, ok := findURLSpecs(hunk)
 		if !ok {
-			return errors.New("found changes to 'uri:' field(s) but can't find old/new url in the patch")
+			return false, errors.New("found changes to 'uri:' field(s) but can't find old/new url in the patch")
 		}
 
 		// sometimes people don't include v* prefix in file names
@@ -129,10 +136,10 @@ func isBumpHunk(hunk []byte, vA, vB string) error {
 
 		uab := strings.ReplaceAll(ua, vA, vB)
 		if uab != ub {
-			return fmt.Errorf("changing old version (%q) with new version (%q) in the url (%s) did not result in the new url (%s), expected: %s", vA, vB, ua, ub, uab)
+			return false, fmt.Errorf("changing old version (%q) with new version (%q) in the url (%s) did not result in the new url (%s), expected: %s", vA, vB, ua, ub, uab)
 		}
 	}
-	return nil
+	return hasURL, nil
 }
 
 var (

@@ -28,7 +28,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	ok, err := IsBumpPatch(b)
+	ok, err := bump.IsBumpPatch(b)
 	if err != nil {
 		log.Fatal(err)
 	}

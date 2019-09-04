@@ -1,6 +1,7 @@
 FROM golang:1-alpine AS build
 RUN apk add --no-cache git
-COPY bumpctl .
+WORKDIR /src/app
+COPY . .
 RUN CGO_ENABLED=0 go build -o /server ./webhook
 
 FROM alpine
