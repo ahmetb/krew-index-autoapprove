@@ -11,8 +11,28 @@ import (
 	"strings"
 )
 
+func IsBumpPatch(patch []byte) (bool, error) {
+	fileDiffs, err := diff.ParseMultiFileDiff(patch)
+	if err != nil {
+		return false, err
+	}
+	var validFiles int
+	for _, v := range fileDiffs {
+		oldName := strings.TrimPrefix(v.OrigName, "a/")
+		newName := strings.TrimPrefix(v.NewName, "b/")
 
-func IsBumpPatch(patch []byte) error {
+		if oldName != newName {
+			return false, nil
+		}
+		if !strings.HasSuffix(newName, ".yaml") {
+			return false, nil
+		}
+		validFiles++
+	}
+	return validFiles > 0, nil
+}
+
+func IsValidBump(patch []byte) error {
 	diffs, err := diff.ParseMultiFileDiff(patch)
 	if err != nil {
 		return fmt.Errorf("failed to parse diff: %v", err)
@@ -61,7 +81,7 @@ func isBumpPlugin(d *diff.FileDiff) error {
 	log.Printf("oldVersion: %s, newVersion: %s", svA, svB)
 
 	for _, hunk := range d.Hunks {
-		if err := isBumpHunk(hunk.Body, vA, vB); err != nil{
+		if err := isBumpHunk(hunk.Body, vA, vB); err != nil {
 			return err
 		}
 	}
@@ -104,8 +124,8 @@ func isBumpHunk(hunk []byte, vA, vB string) error {
 		}
 
 		// sometimes people don't include v* prefix in file names
-		vA = strings.TrimPrefix(vA,"v")
-		vB = strings.TrimPrefix(vB,"v")
+		vA = strings.TrimPrefix(vA, "v")
+		vB = strings.TrimPrefix(vB, "v")
 
 		uab := strings.ReplaceAll(ua, vA, vB)
 		if uab != ub {

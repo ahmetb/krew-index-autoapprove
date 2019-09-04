@@ -28,7 +28,15 @@ func main() {
 		log.Fatal(err)
 	}
 
-	err = bump.IsBumpPatch(b)
+	ok, err := IsBumpPatch(b)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if !ok {
+		log.Fatal("patch doesn't seem to be a bump PR")
+	}
+
+	err = bump.IsValidBump(b)
 	if err != nil {
 		log.Fatal(err)
 	}
