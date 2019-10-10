@@ -78,6 +78,10 @@ func isBumpPlugin(d *diff.FileDiff) error {
 		return fmt.Errorf("version should move forward (%q vs %q)", vA, vB)
 	}
 
+	if meta := svB.PreRelease(); meta != "" {
+		return fmt.Errorf("version should have metadata (%q), only no pre-release versions are auto-approved", meta)
+	}
+
 	log.Printf("oldVersion: %s, newVersion: %s", svA, svB)
 
 	var urlChanges bool
