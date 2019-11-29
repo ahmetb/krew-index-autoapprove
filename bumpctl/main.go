@@ -10,11 +10,13 @@ import (
 )
 
 var (
-	file string
+	file   string
+	author string
 )
 
 func init() {
 	flag.StringVar(&file, "file", "", "pull request patch")
+	flag.StringVar(&author, "author", "", "pull request author (for plugin list updates)")
 	flag.Parse()
 }
 
@@ -26,6 +28,17 @@ func main() {
 	b, err := ioutil.ReadFile(file)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if author != "" {
+		ok, err := bump.IsPluginListUpdate(author, b)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if ok {
+			fmt.Fprintf(os.Stderr, "supplied patch is a straightforward plugin list update")
+			return
+		}
 	}
 
 	ok, err := bump.IsBumpPatch(b)

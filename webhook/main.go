@@ -54,6 +54,9 @@ func webhook(w http.ResponseWriter, req *http.Request) {
 			URL     string `json:"url"`
 			Number  int    `json:"number"`
 			DiffURL string `json:"diff_url"`
+			User    struct {
+				Login string `json:"login"`
+			} `json:"user"`
 		} `json:"pull_request"`
 		Repository struct {
 			Name  string `json:"name"`
@@ -93,32 +96,46 @@ func webhook(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	ok, err := bump.IsBumpPatch(b)
+	isPluginBump, err := bump.IsBumpPatch(b)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintf(w, "error determining if patch is a bump: %v", err)
 		return
 	}
 
-	if !ok {
-		w.WriteHeader(http.StatusPreconditionFailed)
-		fmt.Fprintf(w, "patch is not a bump pr")
+	isPluginListUpdate, err := bump.IsPluginListUpdate(ev.PullRequest.User.Login, b)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "error determining if patch is a plugin list update: %v", err)
 		return
 	}
 
-	err = bump.IsValidBump(b)
+	if !isPluginBump && !isPluginListUpdate {
+		w.WriteHeader(http.StatusPreconditionFailed)
+		fmt.Fprintf(w, "patch is not a bump pr or ")
+		return
+	}
 
 	var comment string
 	comment += ":robot: _Beep beep! I’m a robot speaking on behalf of @ahmetb._ :robot:\n\n-----\n\n"
-	if err == nil {
-		comment += "This pull request seems to be a straightforward version bump.\n"
+
+	if isPluginBump {
+		err = bump.IsValidBump(b)
+		if err == nil {
+			comment += "This pull request seems to straightforward.\n"
+			comment += "I'll go ahead and accept it. :+1: Cheers.\n\n"
+			comment += "/lgtm\n"
+			comment += "/approve\n"
+		} else {
+			comment += "This pull request **does not** seem to be a straightforward version bump." +
+				" I'll have a human review this.\n\n"
+			comment += "_Why wasn't this detected as a plugin version bump:_\n\n>" + err.Error()
+		}
+	} else if isPluginListUpdate {
+		comment += "This pull request seems to be a straightforward plugin list update."
 		comment += "I'll go ahead and accept it. :+1: Cheers.\n\n"
 		comment += "/lgtm\n"
 		comment += "/approve\n"
-	} else {
-		comment += "This pull request **doesn't** seem to be a straightforward version bump." +
-			" I'll have a human review this.\n\n"
-		comment += "_Why wasn't this detected as a plugin version bump:_\n\n>" + err.Error()
 	}
 
 	_, resp, err := gh.Issues.CreateComment(context.TODO(),

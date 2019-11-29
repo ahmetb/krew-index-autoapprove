@@ -16,6 +16,7 @@ func IsBumpPatch(patch []byte) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+
 	var validFiles int
 	for _, v := range fileDiffs {
 		oldName := strings.TrimPrefix(v.OrigName, "a/")
@@ -30,6 +31,20 @@ func IsBumpPatch(patch []byte) (bool, error) {
 		validFiles++
 	}
 	return validFiles > 0, nil
+}
+
+func IsPluginListUpdate(author string, patch []byte) (bool, error) {
+	files, err := diff.ParseMultiFileDiff(patch)
+	if err != nil {
+		return false, err
+	}
+
+	if len(files) != 1 {
+		return false, nil
+	}
+	f := files[0]
+
+	return f.OrigName == "a/plugins.md" && f.NewName == "b/plugins.md" && strings.EqualFold(author, "corneliusweig"), nil
 }
 
 func IsValidBump(patch []byte) error {
