@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/google/go-github/v28/github"
-	"golang.org/x/oauth2"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/google/go-github/v28/github"
+	"golang.org/x/oauth2"
 
 	"krew-index-autoapprove/bump"
 )

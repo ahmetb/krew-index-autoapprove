@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/sourcegraph/go-diff/diff"
-	"k8s.io/apimachinery/pkg/util/version"
 	"log"
 	"regexp"
 	"strings"
+
+	"github.com/sourcegraph/go-diff/diff"
+	"k8s.io/apimachinery/pkg/util/version"
 )
 
 func IsBumpPatch(patch []byte) (bool, error) {
@@ -52,6 +53,7 @@ func IsValidBump(patch []byte) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse diff: %v", err)
 	}
+
 	// TODO do nothing for newly added plugins
 
 	// ensure file names
@@ -126,9 +128,10 @@ var (
 func isBumpHunk(hunk []byte, vA, vB string) (bool, error) {
 	lines := bytes.Split(hunk, []byte{'\n'})
 
-	var hasURL bool
+	var oldURLs []string
+	newURLs := make(map[string]bool)
 
-	for _, line := range lines {
+	for lineno, line := range lines {
 		if !diffLine.Match(line) {
 			continue
 		}
@@ -136,33 +139,49 @@ func isBumpHunk(hunk []byte, vA, vB string) (bool, error) {
 		if versionDiffLine.Match(line) || sumDiffLine.Match(line) {
 			continue
 		}
+
 		if oldURLDiffLine.Match(line) || newURLDiffLine.Match(line) {
-			hasURL = true
+			urlA := oldURLDiffLine.FindSubmatch(line)
+			if len(urlA) > 1 {
+				// add old url to the list
+				url := trimURLMatch(urlA[len(urlA)-1])
+				oldURLs = append(oldURLs, url)
+			}
+
+			urlB := newURLDiffLine.FindSubmatch(line)
+			if len(urlB) > 1 {
+				// add new url to the list
+				url := trimURLMatch(urlB[len(urlB)-1])
+				newURLs[url] = true
+			}
 			continue
 		}
-		return false, fmt.Errorf("diff line unrecognized for version bumps: [%s]", string(line))
+		return false, fmt.Errorf("diff line %d unrecognized for version bumps: [%s]", lineno, string(line))
 	}
 
-	if hasURL {
-		ua, ub, ok := findURLSpecs(hunk)
-		if !ok {
-			return false, errors.New("found changes to 'uri:' field(s) but can't find old/new url in the patch")
-		}
+	for _, oldURL := range oldURLs {
+		ua := oldURL
 
 		// sometimes people don't include v* prefix in file names
 		vA = strings.TrimPrefix(vA, "v")
 		vB = strings.TrimPrefix(vB, "v")
 
 		uab := strings.ReplaceAll(ua, vA, vB)
-		if uab != ub {
-			return false, fmt.Errorf("changing old version (%q) with new version (%q) in the url (%s) did not result in the new url (%s), expected: %s", vA, vB, ua, ub, uab)
+
+		if _, ok := newURLs[uab]; !ok {
+			return false, fmt.Errorf("changing old version (%q) with new version (%q) in the url (%s) does not appear in the patch as %s", vA, vB, ua, uab)
+		} else {
+			delete(newURLs, uab)
 		}
 	}
-	return hasURL, nil
+	for k := range newURLs {
+		return false, fmt.Errorf("new url:%s value cannot be obtained by replacing version %s --> %s", k, vA, vB)
+	}
+	return len(oldURLs) > 0, nil
 }
 
 var (
-	oldVersionSpec = regexp.MustCompile(`-\s+version:\s?(.+)`)
+	oldVersionSpec = regexp.MustCompile(`\-\s+version:\s?(.+)`)
 	newVersionSpec = regexp.MustCompile(`\+\s+version:\s?(.+)`)
 )
 
@@ -178,14 +197,4 @@ func findVersionSpecs(d *diff.FileDiff) (string, string, bool) {
 	return "", "", false
 }
 
-func findURLSpecs(hunk []byte) (string, string, bool) {
-	ua := oldURLDiffLine.FindSubmatch(hunk)
-	ub := newURLDiffLine.FindSubmatch(hunk)
-
-	if len(ua) < 2 || len(ub) < 2 {
-		return "", "", false
-	}
-
-	return string(bytes.Trim(ua[len(ua)-1], `"`)),
-		string(bytes.Trim(ub[len(ub)-1], `"`)), true
-}
+func trimURLMatch(b []byte) string { return string(bytes.Trim(b, `"`)) }
