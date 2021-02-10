@@ -62,14 +62,14 @@ func IsValidBump(patch []byte) error {
 		newName := strings.TrimPrefix(v.NewName, "b/")
 
 		if oldName != newName {
-			return fmt.Errorf("file name changed (%q --> %q)", oldName, newName)
+			return fmt.Errorf("file name changed (`%q` --> `%q`)", oldName, newName)
 		}
 		if !strings.HasSuffix(newName, ".yaml") {
-			return fmt.Errorf("a file doesn't have .yaml suffix: %s", newName)
+			return fmt.Errorf("a file doesn't have .yaml suffix: `%s`", newName)
 		}
 
 		if err := isBumpPlugin(v); err != nil {
-			return fmt.Errorf("file %s is not a straightforward version bump: %v", newName, err)
+			return fmt.Errorf("file `%s` is not a straightforward version bump: %v", newName, err)
 		}
 	}
 
@@ -84,22 +84,22 @@ func isBumpPlugin(d *diff.FileDiff) error {
 
 	svA, err := version.ParseSemantic(vA)
 	if err != nil {
-		return fmt.Errorf("could not parse version string %q", vA)
+		return fmt.Errorf("could not parse version string `%q`", vA)
 	}
 	svB, err := version.ParseSemantic(vB)
 	if err != nil {
-		return fmt.Errorf("could not parse version string %q", vB)
+		return fmt.Errorf("could not parse version string `%q`", vB)
 	}
 
 	if !svA.LessThan(svB) {
-		return fmt.Errorf("version should move forward (%q vs %q)", vA, vB)
+		return fmt.Errorf("version should move forward (`%q` vs `%q`)", vA, vB)
 	}
 
 	if meta := svB.PreRelease(); meta != "" {
-		return fmt.Errorf("version should have metadata (%q), only no pre-release versions are auto-approved", meta)
+		return fmt.Errorf("version should have metadata (`%q`), only no pre-release versions are auto-approved", meta)
 	}
 
-	log.Printf("oldVersion: %s, newVersion: %s", svA, svB)
+	log.Printf("oldVersion: `%s`, newVersion: `%s`", svA, svB)
 
 	var urlChanges bool
 	for _, hunk := range d.Hunks {
@@ -111,7 +111,7 @@ func isBumpPlugin(d *diff.FileDiff) error {
 	}
 
 	if !urlChanges {
-		return errors.New("no 'uri:' field changes done in the patch")
+		return errors.New("no `uri:` field changes done in the patch")
 	}
 
 	return nil
@@ -156,7 +156,7 @@ func isBumpHunk(hunk []byte, vA, vB string) (bool, error) {
 			}
 			continue
 		}
-		return false, fmt.Errorf("diff line %d unrecognized for version bumps: [%s]", lineno, string(line))
+		return false, fmt.Errorf("change on line `%d` does not seem like a version bump: [`%s`]", lineno, string(line))
 	}
 
 	for _, oldURL := range oldURLs {
@@ -169,13 +169,13 @@ func isBumpHunk(hunk []byte, vA, vB string) (bool, error) {
 		uab := strings.ReplaceAll(ua, vA, vB)
 
 		if _, ok := newURLs[uab]; !ok {
-			return false, fmt.Errorf("changing old version (%q) with new version (%q) in the url (%s) does not appear in the patch as %s", vA, vB, ua, uab)
+			return false, fmt.Errorf("changing old version (`%q`) with new version (`%q`) in the url (`%s`) does not appear in the patch as `%s`", vA, vB, ua, uab)
 		} else {
 			delete(newURLs, uab)
 		}
 	}
 	for k := range newURLs {
-		return false, fmt.Errorf("new url:%s value cannot be obtained by replacing version %s --> %s", k, vA, vB)
+		return false, fmt.Errorf("new url: `%s` value cannot be obtained by replacing version `%s` --> `%s`", k, vA, vB)
 	}
 	return len(oldURLs) > 0, nil
 }

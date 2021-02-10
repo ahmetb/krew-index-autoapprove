@@ -123,7 +123,7 @@ func webhook(w http.ResponseWriter, req *http.Request) {
 	if isPluginBump {
 		err = bump.IsValidBump(b)
 		if err == nil {
-			comment += "This pull request seems to straightforward.\n"
+			comment += "This pull request seems to be a straightforward version bump. "
 			comment += "I'll go ahead and accept it. :+1: Cheers.\n\n"
 			comment += "/lgtm\n"
 			comment += "/approve\n"
