@@ -70,10 +70,18 @@ func webhook(w http.ResponseWriter, req *http.Request) {
 	if req.Body != nil {
 		defer req.Body.Close()
 	}
+
+	body, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "cannot read request body: %v", err)
+	}
+
 	var ev prEvent
-	if err := json.NewDecoder(req.Body).Decode(&ev); err != nil {
+	if err := json.Unmarshal(body, &ev); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "error parsing json payload in body: %v", err)
+		fmt.Fprintf(w, "error parsing json payload in body: %v\n", err)
+		fmt.Fprintf(w, "payload: %s", string(body))
 		return
 	}
 
@@ -86,57 +94,48 @@ func webhook(w http.ResponseWriter, req *http.Request) {
 	patchReq, err := http.Get(ev.PullRequest.DiffURL)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "failed to get patch: %v", err)
+		fmt.Fprintf(w, "failed to get patch: %v\n", err)
+		fmt.Fprintf(w, "patch URL: %s\n", ev.PullRequest.DiffURL)
+		fmt.Fprintf(w, "payload: %s", string(body))
 		return
 	}
 	defer patchReq.Body.Close()
-	b, err := ioutil.ReadAll(patchReq.Body)
+	patch, err := ioutil.ReadAll(patchReq.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "failed to read patch url: %v", err)
+		fmt.Fprintf(w, "failed to read patch url: %v\n", err)
+		fmt.Fprintf(w, "payload: %s", string(body))
 		return
 	}
 
-	isPluginBump, err := bump.IsBumpPatch(b)
+	isPluginBump, err := bump.IsBumpPatch(patch)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "error determining if patch is a bump: %v", err)
+		fmt.Fprintf(w, "error determining if patch is a bump: %v\n", err)
+		fmt.Fprintf(w, "patch: %s", string(patch))
 		return
 	}
 
-	isPluginListUpdate, err := bump.IsPluginListUpdate(ev.PullRequest.User.Login, b)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "error determining if patch is a plugin list update: %v", err)
-		return
-	}
-
-	if !isPluginBump && !isPluginListUpdate {
+	if !isPluginBump {
 		w.WriteHeader(http.StatusPreconditionFailed)
-		fmt.Fprintf(w, "patch is not a bump pr or ")
+		fmt.Fprintf(w, "patch is not a plugin version bump pr\n")
+		fmt.Fprintf(w, "patch: %s", string(patch))
 		return
 	}
 
 	var comment string
 	comment += ":robot: _Beep beep! I’m a robot speaking on behalf of @ahmetb._ :robot:\n\n-----\n\n"
 
-	if isPluginBump {
-		err = bump.IsValidBump(b)
-		if err == nil {
-			comment += "This pull request seems to be a straightforward version bump. "
-			comment += "I'll go ahead and accept it. :+1: Cheers.\n\n"
-			comment += "/lgtm\n"
-			comment += "/approve\n"
-		} else {
-			comment += "This pull request **does not** seem to be a straightforward version bump." +
-				" I'll have a human review this.\n\n"
-			comment += "_Why wasn't this detected as a plugin version bump:_\n\n>" + err.Error()
-		}
-	} else if isPluginListUpdate {
-		comment += "This pull request seems to be a straightforward plugin list update."
+	err = bump.IsValidBump(patch)
+	if err == nil {
+		comment += "This pull request seems to be a straightforward version bump. "
 		comment += "I'll go ahead and accept it. :+1: Cheers.\n\n"
 		comment += "/lgtm\n"
 		comment += "/approve\n"
+	} else {
+		comment += "This pull request **does not** seem to be a straightforward version bump." +
+			" I'll have a human review this. If we don't respond within a day, feel free to ping us.\n\n"
+		comment += "_Why wasn't this detected as a plugin version bump:_\n\n>" + err.Error()
 	}
 
 	_, resp, err := gh.Issues.CreateComment(context.TODO(),
