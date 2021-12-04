@@ -27,7 +27,20 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	ok, err := bump.IsBumpPatch(b)
+
+	ok, err := bump.IsNewPluginSubmission(b)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if ok {
+		fmt.Fprintf(os.Stderr, "supplied patch is a new plugin submission")
+		if err := bump.IsReviewablePluginSubmission(b); err != nil {
+			log.Fatal(err)
+		}
+		fmt.Fprintf(os.Stderr, "new plugin submission is reviewable")
+	}
+
+	ok, err = bump.IsBumpPatch(b)
 	if err != nil {
 		log.Fatal(err)
 	}

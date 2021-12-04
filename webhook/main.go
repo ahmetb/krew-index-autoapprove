@@ -116,9 +116,17 @@ func webhook(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if !isPluginBump {
+	isNewSubmission, err := bump.IsNewPluginSubmission(patch)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "error determining if patch is a new plugin submission: %v\n", err)
+		fmt.Fprintf(w, "patch: %s", string(patch))
+		return
+	}
+
+	if !isPluginBump && !isNewSubmission {
 		w.WriteHeader(http.StatusPreconditionFailed)
-		fmt.Fprintf(w, "patch is not a plugin version bump pr\n")
+		fmt.Fprintf(w, "patch is not a new plugin or a version bump pr\n")
 		fmt.Fprintf(w, "patch: %s", string(patch))
 		return
 	}
@@ -126,16 +134,46 @@ func webhook(w http.ResponseWriter, req *http.Request) {
 	var comment string
 	comment += ":robot: _Beep beep! I’m a robot speaking on behalf of @ahmetb._ :robot:\n\n-----\n\n"
 
-	err = bump.IsValidBump(patch)
-	if err == nil {
-		comment += "This pull request seems to be a straightforward version bump. "
-		comment += "I'll go ahead and accept it. :+1: Cheers.\n\n"
-		comment += "/lgtm\n"
-		comment += "/approve\n"
+	if isPluginBump {
+		err = bump.IsValidBump(patch)
+		if err == nil {
+			comment += "This pull request seems to be a straightforward version bump. "
+			comment += "I'll go ahead and accept it. :+1: Cheers.\n\n"
+			comment += "/lgtm\n"
+			comment += "/approve\n"
+		} else {
+			comment += "This pull request **does not** seem to be a straightforward version bump." +
+				" I'll have a human review this. If we don't respond within a day, feel free to ping us.\n\n"
+			comment += "_Why wasn't this detected as a plugin version bump:_\n\n>" + err.Error()
+		}
+		comment += "\n/kind plugin-update"
+	} else if isNewSubmission {
+		if err := bump.IsReviewablePluginSubmission(patch); err != nil {
+			comment += "This pull request will not be reviewed. Reason:\n\n"
+			comment += "> " + err.Error() + "\n\n"
+			comment += "/close"
+		} else {
+			if ev.PullRequest.User.Login == "krew-release-bot" {
+				comment += "First plugin submission should not be done through the @krew-release-bot "
+				comment += "as it is not possible to iterate on this pull request based on feedback.\n\n"
+				comment += "Please submit a new pull request yourself.\n"
+				comment += "/close"
+			} else {
+				comment += "Thanks for submitting your kubectl plugin to Krew!\n"
+				comment += "One of the krew-index maintainers will review it soon. "
+				comment += "Note that the reviews for new plugin submissions may take a few days.\n\n"
+				comment += "In the meanwhile, here are a few tips to make your plugin manifest better:\n"
+				comment += "* Make sure your plugin follows the [best practices](https://krew.sigs.k8s.io/docs/developer-guide/develop/best-practices/).\n"
+				comment += "* Eliminate redundant wording form `shortDescription` (it should be max 50 characters).\n"
+				comment += "* Try to word wrap your `description` to 80-character lines (no usage examples, please).\n"
+				comment += "\nThanks for your patience!"
+			}
+		}
+		comment += "\n/kind new-plugin"
 	} else {
-		comment += "This pull request **does not** seem to be a straightforward version bump." +
-			" I'll have a human review this. If we don't respond within a day, feel free to ping us.\n\n"
-		comment += "_Why wasn't this detected as a plugin version bump:_\n\n>" + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintln(w, "unhandled situation")
+		return
 	}
 
 	_, resp, err := gh.Issues.CreateComment(context.TODO(),

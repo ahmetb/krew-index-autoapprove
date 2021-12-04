@@ -39,10 +39,6 @@ func IsValidBump(patch []byte) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse diff: %v", err)
 	}
-
-	// TODO do nothing for newly added plugins
-
-	// ensure file names
 	for _, v := range diffs {
 		oldName := strings.TrimPrefix(v.OrigName, "a/")
 		newName := strings.TrimPrefix(v.NewName, "b/")
@@ -54,7 +50,7 @@ func IsValidBump(patch []byte) error {
 			return fmt.Errorf("a file doesn't have .yaml suffix: `%s`", newName)
 		}
 
-		if err := isBumpPlugin(v); err != nil {
+		if err := isTrivialPluginVersionBump(v); err != nil {
 			return fmt.Errorf("file `%s` is not a straightforward version bump: %v", newName, err)
 		}
 	}
@@ -62,7 +58,7 @@ func IsValidBump(patch []byte) error {
 	return nil
 }
 
-func isBumpPlugin(d *diff.FileDiff) error {
+func isTrivialPluginVersionBump(d *diff.FileDiff) error {
 	vA, vB, ok := findVersionSpecs(d)
 	if !ok {
 		return errors.New("could not find the old/new version spec in the diff")
