@@ -85,7 +85,9 @@ func webhook(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if ev.Action != "opened" && ev.Action != "create" && ev.Action != "synchronize" {
+	if ev.Action != "opened" {
+		// action="opened" occurs when a PR is first created
+		// action="synchronize" occurs when a new commit is pushed
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprintf(w, "event action %q not accepted", ev.Action)
 		return
