@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/google/go-github/v28/github"
 	"golang.org/x/oauth2"
@@ -93,6 +94,9 @@ func webhook(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// NB: adding sleep here because GitHub returns HTML responses to .patch endpoint (or does a redirect loop)
+	time.Sleep(time.Second*2)
+	
 	patchReq, err := http.Get(ev.PullRequest.DiffURL)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
