@@ -27,6 +27,9 @@ var (
 	SinglePluginBumpTrivial = testCase{
 		name:     "version bump and straightforward",
 		patchURL: "https://github.com/kubernetes-sigs/krew-index/pull/1808.diff"}
+	SinglePluginSameArtifactMultipleOS = testCase{
+		name:     "single plugin with same artifact for multiple os",
+		patchURL: "https://github.com/kubernetes-sigs/krew-index/pull/2640.diff"}
 )
 
 func downloadPatch(t *testing.T, url string) []byte {
