@@ -110,7 +110,7 @@ var (
 func isBumpHunk(hunk []byte, vA, vB string) (bool, error) {
 	lines := bytes.Split(hunk, []byte{'\n'})
 
-	var oldURLs []string
+	oldURLs := make(map[string]bool)
 	newURLs := make(map[string]bool)
 
 	for lineno, line := range lines {
@@ -127,7 +127,7 @@ func isBumpHunk(hunk []byte, vA, vB string) (bool, error) {
 			if len(urlA) > 1 {
 				// add old url to the list
 				url := trimURLMatch(urlA[len(urlA)-1])
-				oldURLs = append(oldURLs, url)
+				oldURLs[url] = true
 			}
 
 			urlB := newURLDiffLine.FindSubmatch(line)
@@ -141,7 +141,7 @@ func isBumpHunk(hunk []byte, vA, vB string) (bool, error) {
 		return false, fmt.Errorf("change on line `%d` does not seem like a version bump: [`%s`]", lineno, string(line))
 	}
 
-	for _, oldURL := range oldURLs {
+	for oldURL := range oldURLs {
 		ua := oldURL
 
 		// sometimes people don't include v* prefix in file names
